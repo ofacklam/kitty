@@ -39,6 +39,12 @@
 
 namespace kitty {
 
+    /**
+     * Checks the unateness in truth table `tt` for variable `var_index`
+     * @return true if function is unate in this variable, false if binate
+     * Additionally, if function is *negative* unate for this variable, the var is added to the `flipped` set,
+     * and the variable is flipped in the truth table
+     */
     template<typename TT>
     bool check_unateness(TT &tt, uint8_t var_index, std::unordered_set<uint8_t> &flipped) {
         auto cof0 = cofactor0(tt, var_index);
@@ -56,6 +62,10 @@ namespace kitty {
         return false;
     }
 
+    /**
+     * Initializes the ILP problem with (n+1) variables, naming and setting all columns to integer type
+     * @return a pointer to the created ILP problem
+     */
     template<typename TT>
     lprec *create_problem(TT &tt) {
         lprec *lp = make_lp(0, tt.num_vars() + 1); // the columns are w_1...w_n, and T
@@ -77,11 +87,20 @@ namespace kitty {
         return lp;
     }
 
+    /**
+     * Calculates whether given variable is active (has valuation 1) in given minterm
+     * @return true if variable is active, false if inactive
+     * Note: currently unused
+     */
     bool is_var_in_minterm(uint8_t var_index, uint64_t minterm_index) {
         uint64_t frequency = 1ul << var_index;
         return (minterm_index / frequency) % 2 == 1;
     }
 
+    /**
+     * Adds a constraint to the ILP,
+     * expressing the "threshold" relation for the valuation of variables given by `minterm_index`
+     */
     template<typename TT>
     void add_minterm_constraint(TT &tt, uint64_t minterm_index, lprec *lp) {
         // Goal: represent the expression (\sum_{i=1}^n w_i x_i) - T
@@ -101,6 +120,9 @@ namespace kitty {
             add_constraint(lp, coefs.data(), LE, -1);   // we want (\sum_{i=1}^n w_i x_i) - T <= -1
     }
 
+    /**
+     * Adds a constraint to the ILP for each variable to be positive
+     */
     template<typename TT>
     void add_positive_contraint(TT &tt, lprec *lp) {
         for (uint8_t var = 0; var <= tt.num_vars(); var++) {
@@ -110,6 +132,9 @@ namespace kitty {
         }
     }
 
+    /**
+     * Sets the expression for the ILP's objective function
+     */
     template<typename TT>
     void set_objective_fun(TT &tt, lprec *lp) {
         // Goal: represent the expression \sum_{i=1}^n w_i + T
@@ -168,8 +193,10 @@ namespace kitty {
         auto ret = solve(lp);
 
         // unsolvable ==> tt is non-TF
-        if(ret != OPTIMAL)
+        if (ret != OPTIMAL) {
+            delete_lp(lp);
             return false;
+        }
 
         // if tt is TF
         // push the weight and threshold values into `linear_form`
@@ -177,10 +204,10 @@ namespace kitty {
         get_ptr_variables(lp, &ptr_weights);
 
         int64_t T = 0;
-        for(uint8_t var = 0; var < n; var++) {
+        for (uint8_t var = 0; var < n; var++) {
             int64_t w_i = ptr_weights[var];
             // for flipped variables, flip back the weight & decrease RHS
-            if(flipped_vars.count(var) > 0) {
+            if (flipped_vars.count(var) > 0) {
                 T -= w_i;
                 linear_form.push_back(-w_i);
             } else {
@@ -193,6 +220,7 @@ namespace kitty {
         if (plf) {
             *plf = linear_form;
         }
+        delete_lp(lp);
         return true;
     }
 
