@@ -1,8 +1,10 @@
 **/*~
 
 build/
+cmake-build-debug/
 
 .vscode/
+.idea/
 
 docs/_build
 docs/_static
